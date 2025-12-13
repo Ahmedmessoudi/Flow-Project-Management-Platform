@@ -1,0 +1,3 @@
+-- Data initialization is handled by DataInitializer.java
+-- This file is kept empty to avoid duplicate inserts
+-- See: org.flow.flowbackend.config.DataInitializer
