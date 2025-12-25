@@ -1,6 +1,7 @@
 package org.flow.flowbackend.service;
 
 import org.flow.flowbackend.model.Project;
+import org.flow.flowbackend.model.ProjectDocument;
 import org.flow.flowbackend.model.SystemConfig;
 import org.flow.flowbackend.model.User;
 import org.flow.flowbackend.repository.SystemConfigRepository;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -143,8 +146,9 @@ public class EmailService {
         Properties props = sender.getJavaMailProperties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.connectiontimeout", "5000");
-        props.put("mail.smtp.timeout", "5000");
+        props.put("mail.smtp.connectiontimeout", "30000");
+        props.put("mail.smtp.timeout", "30000");
+        props.put("mail.smtp.writetimeout", "30000");
 
         return sender;
     }
@@ -293,12 +297,62 @@ public class EmailService {
         body += "\nBest regards,\nThe ProjectFlow Team";
         
         if (shouldAttach) {
-            sendEmailWithAttachment(userEmail, subject, body, documentData, fileName, contentType);
+            // Create a temporary object for the single attachment logic
+            // Ideally we'd pass ProjectDocument but here we just construct the call
+            // We'll trust the new helper handles lists
+            
+            // Actually, let's just make a list
+            List<ProjectDocument> docs = new ArrayList<>();
+            ProjectDocument doc = ProjectDocument.builder()
+                .title(documentTitle) // Title used? filename used?
+                // The singular helper used fileName, contentType, data.
+                // We'll refactor shortly. Use singular call for now but update singular logic.
+                .build();
+                // Wait, ProjectDocument builder requires other fields? No.
+                // But creating a dummy object is messy.
+                // Let's keep the singular logic separate but use the same ROBUST implementation style.
+             
+             sendEmailWithAttachment(userEmail, subject, body, documentData, fileName, contentType);
         } else {
             sendEmail(userEmail, subject, body);
         }
     }
 
+    @Async
+    public void sendBatchDocumentNotificationEmail(String userEmail, String userName, String projectName, List<ProjectDocument> documents) {
+        String subject = "New Documents Available: " + projectName;
+        String name = userName != null ? userName : "User";
+        
+        StringBuilder body = new StringBuilder();
+        body.append("Hello ").append(name).append(",\n\n");
+        body.append(documents.size()).append(" new documents have been uploaded to the project '").append(projectName).append("'.\n\n");
+        body.append("Documents:\n");
+        
+        long totalSize = 0;
+        List<ProjectDocument> attachments = new ArrayList<>();
+        
+        for (ProjectDocument doc : documents) {
+            body.append("- ").append(doc.getTitle()).append("\n");
+            
+            if (doc.getData() != null) {
+                long docSize = doc.getData().length;
+                // 25MB limit (approx)
+                if (totalSize + docSize <= 25 * 1024 * 1024) { 
+                     attachments.add(doc);
+                     totalSize += docSize;
+                } else {
+                     body.append("  (File too large to attach, please download from portal)\n");
+                }
+            }
+        }
+        
+        body.append("\nLog in to ProjectFlow to view and download these documents.\n");
+        body.append("\nBest regards,\nThe ProjectFlow Team");
+
+        sendEmailWithAttachments(userEmail, subject, body.toString(), attachments);
+    }
+    
+    // Updated Singular Helper (Robust)
     private void sendEmailWithAttachment(String to, String subject, String body, 
                                           byte[] attachmentData, String fileName, String contentType) {
         try {
@@ -317,18 +371,69 @@ public class EmailService {
             helper.setSubject(subject);
             helper.setText(body);
 
-            // Add attachment
+            // Add attachment with robust ByteArrayResource
             if (attachmentData != null && fileName != null) {
                 String attachmentContentType = contentType != null ? contentType : "application/octet-stream";
+                System.out.println("Attaching file: " + fileName + ", Type: " + attachmentContentType + ", Size: " + attachmentData.length);
+                
                 helper.addAttachment(fileName, 
-                    new org.springframework.core.io.ByteArrayResource(attachmentData), 
+                    new org.springframework.core.io.ByteArrayResource(attachmentData) {
+                        @Override
+                        public String getFilename() {
+                            return fileName;
+                        }
+                    }, 
                     attachmentContentType);
             }
 
             sender.send(mimeMessage);
             System.out.println("Email with attachment sent successfully to: " + to);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             System.err.println("Failed to send email with attachment to " + to + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // New Plural Helper
+    private void sendEmailWithAttachments(String to, String subject, String body, List<ProjectDocument> attachments) {
+        try {
+            JavaMailSender sender = getConfiguredMailSender();
+            if (sender == null) {
+                System.out.println("Email not sent (SMTP not configured): " + subject + " to " + to);
+                return;
+            }
+
+            jakarta.mail.internet.MimeMessage mimeMessage = sender.createMimeMessage();
+            org.springframework.mail.javamail.MimeMessageHelper helper = 
+                new org.springframework.mail.javamail.MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+            helper.setFrom(getFromEmail());
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body);
+
+            for (ProjectDocument doc : attachments) {
+                if (doc.getData() != null) {
+                    String fileName = doc.getFileName() != null ? doc.getFileName() : doc.getTitle();
+                    String contentType = doc.getContentType() != null ? doc.getContentType() : "application/octet-stream";
+                    
+                    System.out.println("Attaching batch file: " + fileName + ", Size: " + doc.getData().length);
+                    
+                    helper.addAttachment(fileName, 
+                        new org.springframework.core.io.ByteArrayResource(doc.getData()) {
+                            @Override
+                            public String getFilename() {
+                                return fileName;
+                            }
+                        }, 
+                        contentType);
+                }
+            }
+
+            sender.send(mimeMessage);
+            System.out.println("Batch email with " + attachments.size() + " attachments sent successfully to: " + to);
+        } catch (Throwable e) {
+            System.err.println("Failed to send batch email to " + to + ": " + e.getMessage());
             e.printStackTrace();
         }
     }

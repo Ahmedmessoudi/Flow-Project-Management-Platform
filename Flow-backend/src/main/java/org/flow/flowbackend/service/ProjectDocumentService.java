@@ -69,8 +69,8 @@ public class ProjectDocumentService {
 
         ProjectDocument savedDocument = projectDocumentRepository.save(document);
 
-        // Send email notification to all CLIENT members of this project
-        notifyClientsAboutNewDocument(projectId, project.getName(), savedDocument);
+        // notification logic removed (handled by batch endpoint)
+        // notifyClientsAboutNewDocument(projectId, project.getName(), savedDocument);
 
         return savedDocument;
     }
@@ -78,29 +78,34 @@ public class ProjectDocumentService {
     /**
      * Notify all CLIENT members of a project about a new document.
      */
-    private void notifyClientsAboutNewDocument(Long projectId, String projectName, ProjectDocument document) {
+    /**
+     * Notify all CLIENT members of a project about NEW documents (Batch).
+     */
+    public void notifyClientsAboutDocuments(Long projectId, List<Long> documentIds) {
+        Project project = projectService.getProjectById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        
+        List<ProjectDocument> documents = projectDocumentRepository.findAllById(documentIds);
+        if (documents.isEmpty()) return;
+
         try {
             List<ProjectMember> clients = projectMemberRepository.findClientsByProjectId(projectId);
             
             for (ProjectMember pm : clients) {
                 User user = pm.getUser();
-                emailService.sendDocumentNotificationEmail(
+                emailService.sendBatchDocumentNotificationEmail(
                     user.getEmail(),
                     user.getFirstName(),
-                    projectName,
-                    document.getTitle(),
-                    document.getData(),
-                    document.getFileName(),
-                    document.getContentType()
+                    project.getName(),
+                    documents
                 );
             }
             
             if (!clients.isEmpty()) {
-                System.out.println("Document notification emails queued for " + clients.size() + " client(s)");
+                System.out.println("Batch document notification emails queued for " + clients.size() + " client(s) for " + documents.size() + " documents.");
             }
         } catch (Exception e) {
-            // Log but don't fail the document upload if email fails
-            System.err.println("Failed to send document notification emails: " + e.getMessage());
+            System.err.println("Failed to send batch document notification: " + e.getMessage());
         }
     }
 

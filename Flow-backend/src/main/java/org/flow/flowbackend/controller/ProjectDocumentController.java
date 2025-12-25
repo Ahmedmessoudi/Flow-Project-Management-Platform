@@ -73,6 +73,16 @@ public class ProjectDocumentController {
         }
     }
 
+    @PostMapping("/{projectId}/documents/notify")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN') or hasAuthority('ORG_ADMIN') or hasAuthority('PROJECT_MANAGER')")
+    public ResponseEntity<?> notifyDocuments(
+            @PathVariable Long projectId,
+            @RequestBody List<Long> documentIds) {
+        
+        projectDocumentService.notifyClientsAboutDocuments(projectId, documentIds);
+        return ResponseEntity.ok(new MessageResponse("Notification queued successfully"));
+    }
+
     @DeleteMapping("/documents/{id}")
     @PreAuthorize("hasAuthority('SUPER_ADMIN') or hasAuthority('ORG_ADMIN') or hasAuthority('PROJECT_MANAGER')")
     public ResponseEntity<MessageResponse> deleteDocument(@PathVariable Long id) {
