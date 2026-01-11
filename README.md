@@ -259,41 +259,15 @@ OrganizationMember       ProjectMember          TaskComment
 - **Input validation** using Bean Validation and Zod schemas
 - **Password encryption** with BCrypt
 
----
-
-## 🎨 Screenshots
-
-*Coming soon: Dashboard, Project Management, Client Portal, and Task Board views*
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting a pull request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
 
 ## 👥 Authors
 
 **Ahmed Messoudi** - *Initial work and development*
 
 ---
-
-<p align="center">
-  <strong>Built with ❤️ for seamless project and client management</strong>
-</p>
 
 <p align="center">
   <a href="#-flow--project--client-management-platform">Back to top ↑</a>
